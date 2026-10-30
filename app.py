@@ -1,33 +1,52 @@
-"""A small, readable Streamlit dashboard for exploring café sales."""
-
 from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+# page config has to come first
+st.set_page_config(page_title="Cafe sales 2025", page_icon="☕", layout="wide")
 
-# Keep page setup first so Streamlit can use the full browser width.
-st.set_page_config(page_title="Café sales | 2025", page_icon="☕", layout="wide")
-
-# A simple palette and light styling keep the charts easy to read.
-COLORS = {"Pune": "#287D70", "Jaipur": "#D17A4A", "Kochi": "#5479A6"}
-INK = "#263B36"
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+OUTLET_ORDER = ["Pune", "Jaipur", "Kochi"]
+ITEM_ORDER = ["Beverages", "Bakery", "Merchandise"]
+OUTLET_COLORS = {"Pune": "#C45C26", "Jaipur": "#2C6E63", "Kochi": "#C4A035"}
 
 st.markdown(
     """
     <style>
-    .stApp { background: #F6F7F4; color: #263B36; }
-    h1, h2, h3 { color: #263B36; letter-spacing: -0.02em; }
-    [data-testid="stMetric"] {
-      background: white; border: 1px solid #E3E8E3; padding: 16px 18px;
-      border-radius: 10px;
-    }
-    [data-testid="stSidebar"] { background: #EEF2EE; }
-    [data-testid="stPlotlyChart"] {
-      background: white; border: 1px solid #E3E8E3; border-radius: 10px;
-      padding: 8px;
-    }
+      .stApp { background: #f4efe6; color: #2a2118; }
+      [data-testid="stHeader"] { background: transparent; }
+      h1 { font-family: Georgia, "Times New Roman", serif; color: #2a2118; }
+      [data-testid="stSidebar"] { background: #2c2118; }
+      [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+      [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
+      [data-testid="stSidebar"] h2,
+      [data-testid="stSidebar"] small,
+      [data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+        color: #e8dccb !important;
+      }
+      [data-testid="stMetric"] {
+        background: #fffaf3;
+        border: 1px solid #e4d7c3;
+        border-radius: 12px;
+        padding: 12px 16px;
+      }
+      [data-testid="stMetricLabel"] p { color: #6d5c4d !important; }
+      [data-testid="stMetricValue"] { color: #2a2118 !important; }
+      [data-testid="stMetricDelta"] { color: #6d5c4d !important; }
+      .hero {
+        background: #fffaf3;
+        border: 1px solid #e4d7c3;
+        border-radius: 14px;
+        padding: 18px 22px 14px 22px;
+        margin-bottom: 12px;
+      }
+      .hero .kicker { color: #8a5a32; font-size: 0.85rem; margin: 0; }
+      .hero h1 { margin: 4px 0 6px 0; font-size: 2.1rem; }
+      .hero p { margin: 0; color: #5c4e40; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -35,189 +54,247 @@ st.markdown(
 
 
 @st.cache_data
-def load_sales_data() -> pd.DataFrame:
-    """Read the cleaned sales file once and reuse it across filter changes."""
-    csv_path = Path(__file__).with_name("cafe_clean.csv")
-    return pd.read_csv(csv_path, parse_dates=["Date"])
+def load_data():
+    csv_path = Path(__file__).parent / "cafe_clean.csv"
+    df = pd.read_csv(csv_path, parse_dates=["Date"])
+    if "Month" not in df.columns:
+        df["Month"] = df["Date"].dt.month
+    if "Weekday" not in df.columns:
+        df["Weekday"] = df["Date"].dt.dayofweek
+    return df
 
 
-def format_money_millions(amount_in_thousands: float) -> str:
-    """Convert Rs thousand into a short Rs million label."""
-    return f"₹{amount_in_thousands / 1000:,.1f} million"
+def inr_millions(rs_thousand):
+    # csv stores revenue in Rs thousand
+    value = rs_thousand / 1000
+    if value >= 1:
+        return f"₹{value:,.1f} million"
+    return f"₹{rs_thousand:,.0f} thousand"
 
 
-def style_chart(fig, *, height: int = 360):
-    """Apply the same clean typography and spacing to every Plotly chart."""
+def polish(fig, height=380, legend_title=None, y_grid=True):
     fig.update_layout(
         template="plotly_white",
-        font=dict(family="Arial, sans-serif", color=INK, size=13),
-        title=dict(font=dict(size=18), x=0.02, xanchor="left"),
-        margin=dict(l=16, r=16, t=58, b=22),
+        font=dict(family="Segoe UI, Helvetica, sans-serif", color="#2a2118", size=13),
+        title=dict(font=dict(size=16), x=0.01, xanchor="left"),
+        margin=dict(l=8, r=12, t=52, b=8),
         height=height,
-        paper_bgcolor="white",
-        plot_bgcolor="white",
-        legend_title_text="Outlet",
+        paper_bgcolor="#fffaf3",
+        plot_bgcolor="#fffaf3",
+        legend_title_text=legend_title or "",
+        coloraxis_showscale=False,
     )
     fig.update_xaxes(showgrid=False, zeroline=False)
-    fig.update_yaxes(showgrid=False, zeroline=False)
+    fig.update_yaxes(
+        showgrid=y_grid,
+        gridcolor="#eadfce",
+        zeroline=False,
+    )
     return fig
 
 
-def make_sales_charts(sales: pd.DataFrame):
-    """Build the four charts from the currently selected rows."""
-    monthly = sales.groupby(["Month", "Outlet"], as_index=False)["Revenue"].sum()
-    by_item = sales.groupby("Item", as_index=False)["Revenue"].sum().sort_values("Revenue")
-    by_item["Share"] = by_item["Revenue"] / by_item["Revenue"].sum()
-    outlet_item = sales.pivot_table(
-        index="Outlet", columns="Item", values="Revenue", aggfunc="mean"
-    )
-    by_offer = sales.groupby("Offer", as_index=False)["Revenue"].mean()
+df = load_data()
 
-    monthly_chart = px.line(
-        monthly,
-        x="Month",
-        y="Revenue",
-        color="Outlet",
-        markers=True,
-        color_discrete_map=COLORS,
-        title="Monthly revenue by outlet",
-        labels={"Month": "Month number", "Revenue": "Revenue (Rs thousand)"},
-    )
-    monthly_chart.update_xaxes(dtick=1)
-
-    item_chart = px.bar(
-        by_item,
-        x="Revenue",
-        y="Item",
-        orientation="h",
-        text=by_item["Share"].map(lambda share: f"{share:.0%}"),
-        title="Revenue by product category",
-        labels={"Revenue": "Revenue (Rs thousand)", "Item": "Product category"},
-        color_discrete_sequence=["#287D70"],
-    )
-    item_chart.update_traces(textposition="outside", cliponaxis=False)
-
-    heatmap = px.imshow(
-        outlet_item,
-        text_auto=".0f",
-        color_continuous_scale="Teal",
-        title="Average sale by outlet and category",
-        labels={"x": "Product category", "y": "Outlet", "color": "Rs thousand"},
-        aspect="auto",
-    )
-
-    offer_chart = px.bar(
-        by_offer,
-        x="Offer",
-        y="Revenue",
-        title="Average sale at each offer level",
-        labels={"Offer": "Offer (%)", "Revenue": "Average revenue (Rs thousand)"},
-        color_discrete_sequence=["#D17A4A"],
-    )
-    offer_chart.update_xaxes(dtick=5)
-
-    return tuple(style_chart(chart) for chart in (monthly_chart, item_chart, heatmap, offer_chart))
-
-
-sales = load_sales_data()
-sales["Date"] = pd.to_datetime(sales["Date"])
-if "Month" not in sales.columns:
-    sales["Month"] = sales["Date"].dt.month
-
-# Page introduction
-st.title("Café sales, made clear")
-st.write(
-    "Explore how sales changed during 2025, which categories contributed most, "
-    "and how results differ by outlet. Use the filters to focus the whole page."
-)
-st.caption("All revenue is in Indian rupees. Charts and totals update together when you change a filter.")
-
-# Sidebar filters
-st.sidebar.title("Choose what to see")
-st.sidebar.caption("Start with everything selected, then narrow the view.")
-selected_outlets = st.sidebar.multiselect(
-    "Outlets", options=sorted(sales["Outlet"].unique()),
-    default=sorted(sales["Outlet"].unique()),
-    help="Select one or more café locations.",
-)
-selected_items = st.sidebar.multiselect(
-    "Product categories", options=sorted(sales["Item"].unique()),
-    default=sorted(sales["Item"].unique()),
-    help="Choose Beverages, Bakery, Merchandise, or any combination.",
-)
-first_month, last_month = st.sidebar.slider(
-    "Months to include", min_value=1, max_value=12, value=(1, 12),
-    help="1 is January and 12 is December.",
-)
-first_offer, last_offer = st.sidebar.slider(
-    "Offer range (%)", min_value=0, max_value=25, value=(0, 25), step=5,
+st.markdown(
+    """
+    <div class="hero">
+      <p class="kicker">Daily café sales · Pune · Jaipur · Kochi</p>
+      <h1>How the shops did in 2025</h1>
+      <p>Revenue in the file is Rs thousand. Totals on this page are shown in millions of rupees.</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
-# Each condition below is one filter. A row must match all four to remain visible.
-visible_sales = sales[
-    sales["Outlet"].isin(selected_outlets)
-    & sales["Item"].isin(selected_items)
-    & sales["Month"].between(first_month, last_month)
-    & sales["Offer"].between(first_offer, last_offer)
-].copy()
+st.sidebar.header("Filters")
+st.sidebar.caption("Leave everything ticked if you just want the full year.")
 
-if visible_sales.empty:
-    st.info("There are no sales for this selection. Try adding an outlet or widening a range.")
+picked_outlets = st.sidebar.multiselect(
+    "Outlets",
+    options=OUTLET_ORDER,
+    default=OUTLET_ORDER,
+)
+picked_items = st.sidebar.multiselect(
+    "Items",
+    options=ITEM_ORDER,
+    default=ITEM_ORDER,
+)
+start_m, end_m = st.sidebar.select_slider(
+    "Months",
+    options=list(range(1, 13)),
+    value=(1, 12),
+    format_func=lambda m: MONTHS[m - 1],
+)
+start_offer, end_offer = st.sidebar.slider(
+    "Offer %",
+    min_value=0,
+    max_value=25,
+    value=(0, 25),
+    step=5,
+)
+
+if not picked_outlets or not picked_items:
+    st.warning("Pick at least one outlet and one item. The charts need both.")
     st.stop()
 
-# Headline numbers give readers the scale before they interpret the charts.
-best_outlet = visible_sales.groupby("Outlet")["Revenue"].sum().idxmax()
-kpis = st.columns(4)
-kpis[0].metric("Total revenue", format_money_millions(visible_sales["Revenue"].sum()))
-kpis[1].metric("Average per record", f"₹{visible_sales['Revenue'].mean():,.0f} thousand")
-kpis[2].metric("Sales records", f"{len(visible_sales):,}")
-kpis[3].metric("Top outlet", best_outlet)
+view = df[
+    df["Outlet"].isin(picked_outlets)
+    & df["Item"].isin(picked_items)
+    & df["Month"].between(start_m, end_m)
+    & df["Offer"].between(start_offer, end_offer)
+].copy()
 
-# Explain the scope in ordinary language so filtered charts are not misread.
+if view.empty:
+    st.info("Nothing matches those filters. Nudge the month or offer range a bit.")
+    st.stop()
+
+outlet_totals = view.groupby("Outlet")["Revenue"].sum().reindex(picked_outlets)
+top_shop = outlet_totals.idxmax()
+full_total = df["Revenue"].sum()
+share = view["Revenue"].sum() / full_total
+
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Total revenue", inr_millions(view["Revenue"].sum()))
+c2.metric("Avg row", f"₹{view['Revenue'].mean():,.0f}k")
+c3.metric("Rows", f"{len(view):,}")
+c4.metric("Busiest outlet", top_shop)
+
 st.caption(
-    f"Showing {len(visible_sales):,} records from {len(selected_outlets)} selected outlet(s), "
-    f"{len(selected_items)} selected category/categories, months {first_month}–{last_month}, "
-    f"and offers from {first_offer}% to {last_offer}%."
+    f"{MONTHS[start_m - 1]}–{MONTHS[end_m - 1]}  ·  "
+    f"{len(picked_outlets)} outlet(s), {len(picked_items)} item(s)  ·  "
+    f"offers {start_offer}–{end_offer}%  ·  "
+    f"{share:.0%} of the full year  ·  "
+    f"{top_shop} made ₹{outlet_totals[top_shop] / 1000:,.1f} million"
 )
 
-monthly_chart, item_chart, heatmap, offer_chart = make_sales_charts(visible_sales)
-trend_tab, mix_tab, offer_tab, data_tab = st.tabs(
-    ["Sales over time", "Products and outlets", "Offers", "Data"]
+# --- charts ---
+monthly = (
+    view.groupby(["Month", "Outlet"], as_index=False)["Revenue"]
+    .sum()
+    .sort_values("Month")
+)
+monthly["MonthLabel"] = monthly["Month"].map(lambda m: MONTHS[m - 1])
+fig_month = px.line(
+    monthly,
+    x="MonthLabel",
+    y="Revenue",
+    color="Outlet",
+    markers=True,
+    color_discrete_map=OUTLET_COLORS,
+    category_orders={"Outlet": OUTLET_ORDER, "MonthLabel": MONTHS},
+    title="Revenue through the year",
+    labels={"MonthLabel": "", "Revenue": "Revenue (Rs thousand)"},
+)
+fig_month.update_traces(line=dict(width=2.5), marker=dict(size=7))
+polish(fig_month, legend_title="Outlet")
+
+by_item = (
+    view.groupby("Item", as_index=False)["Revenue"]
+    .sum()
+    .sort_values("Revenue")
+)
+by_item["pct"] = by_item["Revenue"] / by_item["Revenue"].sum()
+fig_item = px.bar(
+    by_item,
+    x="Revenue",
+    y="Item",
+    orientation="h",
+    text=by_item["pct"].map(lambda p: f"{p:.0%}"),
+    color="Item",
+    color_discrete_map={
+        "Beverages": "#C45C26",
+        "Bakery": "#2C6E63",
+        "Merchandise": "#C4A035",
+    },
+    category_orders={"Item": ITEM_ORDER},
+    title="Which items brought the money in",
+    labels={"Revenue": "Revenue (Rs thousand)", "Item": ""},
+)
+fig_item.update_traces(textposition="outside", cliponaxis=False, showlegend=False)
+polish(fig_item)
+
+grid = (
+    view.pivot_table(index="Outlet", columns="Item", values="Revenue", aggfunc="mean")
+    .reindex(index=[o for o in OUTLET_ORDER if o in picked_outlets])
+    .reindex(columns=[i for i in ITEM_ORDER if i in picked_items])
+)
+fig_heat = px.imshow(
+    grid,
+    text_auto=".0f",
+    color_continuous_scale=["#f3eadb", "#e7b07a", "#c45c26"],
+    title="Average row (Rs thousand) by shop and item",
+    labels={"x": "", "y": "", "color": "Rs thousand"},
+    aspect="auto",
+)
+polish(fig_heat, height=440, y_grid=False)
+fig_heat.update_layout(margin=dict(l=70, r=16, t=72, b=36))
+
+by_offer = view.groupby("Offer", as_index=False)["Revenue"].mean()
+fig_offer = px.bar(
+    by_offer,
+    x="Offer",
+    y="Revenue",
+    title="Average row at each offer level",
+    labels={"Offer": "Offer %", "Revenue": "Avg revenue (Rs thousand)"},
+    color_discrete_sequence=["#2C6E63"],
+)
+fig_offer.update_xaxes(dtick=5)
+polish(fig_offer)
+
+by_day = view.groupby("Weekday", as_index=False)["Revenue"].mean()
+by_day["DayName"] = by_day["Weekday"].map(lambda d: WEEKDAYS[int(d)])
+fig_day = px.bar(
+    by_day,
+    x="DayName",
+    y="Revenue",
+    title="Weekdays vs weekends",
+    labels={"DayName": "", "Revenue": "Avg revenue (Rs thousand)"},
+    color="DayName",
+    color_discrete_map={
+        "Mon": "#d8c4a8",
+        "Tue": "#d8c4a8",
+        "Wed": "#d8c4a8",
+        "Thu": "#d8c4a8",
+        "Fri": "#d8c4a8",
+        "Sat": "#C45C26",
+        "Sun": "#C45C26",
+    },
+    category_orders={"DayName": WEEKDAYS},
+)
+fig_day.update_traces(showlegend=False)
+polish(fig_day)
+
+chart_cfg = {"displaylogo": False, "displayModeBar": False}
+
+left, right = st.columns((1.35, 1), gap="medium")
+left.plotly_chart(fig_month, use_container_width=True, config=chart_cfg)
+right.plotly_chart(fig_item, use_container_width=True, config=chart_cfg)
+
+a, b, c = st.columns(3, gap="medium")
+a.plotly_chart(fig_heat, use_container_width=True, config=chart_cfg)
+b.plotly_chart(fig_offer, use_container_width=True, config=chart_cfg)
+c.plotly_chart(fig_day, use_container_width=True, config=chart_cfg)
+
+st.caption(
+    "The offer chart is just a comparison of groups. It does not prove the discount caused the extra sales. "
+    "Three crazy outlier rows were already dropped from cafe_clean.csv."
 )
 
-with trend_tab:
-    st.subheader("How sales changed")
-    st.write("Each line follows one outlet through the months. Hover over a point to see its total.")
-    st.plotly_chart(monthly_chart, use_container_width=True)
-
-with mix_tab:
-    st.subheader("Where sales came from")
-    st.write("The labels on the bars show each category’s share of the selected revenue.")
-    st.plotly_chart(item_chart, use_container_width=True)
-    st.write("The table of colors compares average record revenue. Darker cells indicate higher averages.")
-    st.plotly_chart(heatmap, use_container_width=True)
-
-with offer_tab:
-    st.subheader("Offers and average sales")
-    st.write(
-        "This chart compares records with different offer levels. It can show a relationship, "
-        "but it cannot tell us that the offer caused the sales change."
-    )
-    st.plotly_chart(offer_chart, use_container_width=True)
-
-with data_tab:
-    st.subheader("The records behind the charts")
-    st.write("Use this table to check dates, outlets, categories, offers, and revenue values.")
+with st.expander("Peek at the rows"):
+    show = view[["Date", "Outlet", "Item", "Offer", "Revenue", "Month"]].sort_values("Date")
     st.download_button(
-        "Download these rows as CSV",
-        data=visible_sales.to_csv(index=False).encode("utf-8"),
-        file_name="cafe_sales_selection.csv",
+        "Download this slice as CSV",
+        data=show.to_csv(index=False).encode("utf-8"),
+        file_name="cafe_sales_filtered.csv",
         mime="text/csv",
     )
-    st.dataframe(visible_sales, use_container_width=True, hide_index=True)
-
-st.divider()
-st.caption(
-    "Data note: this practice dataset contains three deliberately inserted extreme values, "
-    "which were excluded in the cleaned file. Offer comparisons are descriptive, not causal."
-)
+    st.dataframe(
+        show,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Date": st.column_config.DateColumn("Date", format="YYYY-MM-DD"),
+            "Revenue": st.column_config.NumberColumn("Revenue (Rs thousand)", format="%.1f"),
+            "Offer": st.column_config.NumberColumn("Offer %"),
+        },
+    )

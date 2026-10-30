@@ -5,7 +5,7 @@ import plotly.express as px
 import streamlit as st
 
 # page config has to come first
-st.set_page_config(page_title="Cafe sales 2025", page_icon="☕", layout="wide")
+st.set_page_config(page_title="Café sales | 2025", page_icon="☕", layout="wide")
 
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -106,18 +106,20 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-st.sidebar.header("Filters")
-st.sidebar.caption("Leave everything ticked if you just want the full year.")
+st.sidebar.header("Make it your view")
+st.sidebar.caption("Everything starts selected. Change one filter at a time to see what moves.")
 
 picked_outlets = st.sidebar.multiselect(
     "Outlets",
     options=OUTLET_ORDER,
     default=OUTLET_ORDER,
+    help="Choose one or more locations to compare.",
 )
 picked_items = st.sidebar.multiselect(
     "Items",
     options=ITEM_ORDER,
     default=ITEM_ORDER,
+    help="Choose the product categories to include.",
 )
 start_m, end_m = st.sidebar.select_slider(
     "Months",
@@ -131,6 +133,18 @@ start_offer, end_offer = st.sidebar.slider(
     max_value=25,
     value=(0, 25),
     step=5,
+    help="Keep rows whose offer is inside this range.",
+)
+trend_detail = st.sidebar.radio(
+    "Trend detail",
+    options=["Month", "Week", "Day"],
+    horizontal=True,
+    help="Choose how much detail to show in the sales trend.",
+)
+offer_item = st.sidebar.selectbox(
+    "Compare offers for",
+    options=["All selected items"] + [item for item in ITEM_ORDER if item in picked_items],
+    help="Offers can behave differently for different product categories.",
 )
 
 if not picked_outlets or not picked_items:
@@ -155,12 +169,12 @@ share = view["Revenue"].sum() / full_total
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Total revenue", inr_millions(view["Revenue"].sum()))
-c2.metric("Avg row", f"₹{view['Revenue'].mean():,.0f}k")
-c3.metric("Rows", f"{len(view):,}")
-c4.metric("Busiest outlet", top_shop)
+c2.metric("Average sale row", f"₹{view['Revenue'].mean():,.0f}k", help="Each row is one item at one outlet on one date.")
+c3.metric("Records in view", f"{len(view):,}")
+c4.metric("Leading outlet", top_shop)
 
 st.caption(
-    f"{MONTHS[start_m - 1]}–{MONTHS[end_m - 1]}  ·  "
+    f"Showing {MONTHS[start_m - 1]}–{MONTHS[end_m - 1]}  ·  "
     f"{len(picked_outlets)} outlet(s), {len(picked_items)} item(s)  ·  "
     f"offers {start_offer}–{end_offer}%  ·  "
     f"{share:.0%} of the full year  ·  "
@@ -168,22 +182,34 @@ st.caption(
 )
 
 # --- charts ---
-monthly = (
-    view.groupby(["Month", "Outlet"], as_index=False)["Revenue"]
-    .sum()
-    .sort_values("Month")
-)
-monthly["MonthLabel"] = monthly["Month"].map(lambda m: MONTHS[m - 1])
+# Group dates at the level chosen in the sidebar. Month labels stay readable;
+# weeks and days retain real dates so Plotly can format and zoom the axis.
+if trend_detail == "Month":
+    trend = view.groupby(["Month", "Outlet"], as_index=False)["Revenue"].sum()
+    trend["Period"] = trend["Month"].map(lambda month: MONTHS[month - 1])
+    period_order = {"Period": MONTHS}
+    trend_title = "Revenue by month"
+elif trend_detail == "Week":
+    trend = view.assign(Period=view["Date"].dt.to_period("W").dt.start_time)
+    trend = trend.groupby(["Period", "Outlet"], as_index=False)["Revenue"].sum()
+    period_order = {}
+    trend_title = "Revenue by week"
+else:
+    trend = view.groupby(["Date", "Outlet"], as_index=False)["Revenue"].sum()
+    trend = trend.rename(columns={"Date": "Period"})
+    period_order = {}
+    trend_title = "Revenue by day"
+
 fig_month = px.line(
-    monthly,
-    x="MonthLabel",
+    trend.sort_values("Period"),
+    x="Period",
     y="Revenue",
     color="Outlet",
-    markers=True,
+    markers=trend_detail == "Month",
     color_discrete_map=OUTLET_COLORS,
-    category_orders={"Outlet": OUTLET_ORDER, "MonthLabel": MONTHS},
-    title="Revenue through the year",
-    labels={"MonthLabel": "", "Revenue": "Revenue (Rs thousand)"},
+    category_orders={"Outlet": OUTLET_ORDER, **period_order},
+    title=trend_title,
+    labels={"Period": "", "Revenue": "Revenue (Rs thousand)"},
 )
 fig_month.update_traces(line=dict(width=2.5), marker=dict(size=7))
 polish(fig_month, legend_title="Outlet")
@@ -229,7 +255,8 @@ fig_heat = px.imshow(
 polish(fig_heat, height=440, y_grid=False)
 fig_heat.update_layout(margin=dict(l=70, r=16, t=72, b=36))
 
-by_offer = view.groupby("Offer", as_index=False)["Revenue"].mean()
+offer_view = view if offer_item == "All selected items" else view[view["Item"] == offer_item]
+by_offer = offer_view.groupby("Offer", as_index=False)["Revenue"].mean()
 fig_offer = px.bar(
     by_offer,
     x="Offer",
@@ -264,20 +291,47 @@ fig_day = px.bar(
 fig_day.update_traces(showlegend=False)
 polish(fig_day)
 
-chart_cfg = {"displaylogo": False, "displayModeBar": False}
+# Keep the compact Plotly toolbar available for zoom, reset, and image download.
+chart_cfg = {
+    "displaylogo": False,
+    "displayModeBar": "hover",
+    "modeBarButtonsToAdd": ["select2d", "lasso2d"],
+    "toImageButtonOptions": {"format": "png", "filename": "cafe_sales_chart", "scale": 2},
+}
 
 left, right = st.columns((1.35, 1), gap="medium")
 left.plotly_chart(fig_month, use_container_width=True, config=chart_cfg)
+left.caption("Follow the lines across months, weeks, or days. Hover for exact values; use the toolbar to zoom or save an image.")
 right.plotly_chart(fig_item, use_container_width=True, config=chart_cfg)
+right.caption("The percentage at the end of each bar is that category's share of the selected revenue.")
 
 a, b, c = st.columns(3, gap="medium")
 a.plotly_chart(fig_heat, use_container_width=True, config=chart_cfg)
+a.caption("Each cell is an average. Darker cells mean a larger average sale row.")
 b.plotly_chart(fig_offer, use_container_width=True, config=chart_cfg)
+b.caption("Compare offers for one category at a time with the sidebar selector.")
 c.plotly_chart(fig_day, use_container_width=True, config=chart_cfg)
+c.caption("Bars show average revenue per row; weekends are highlighted in orange.")
+
+# Turn the current selection into a short, plain-language reading guide.
+peak = view.groupby("Month")["Revenue"].sum().idxmax()
+top_item = view.groupby("Item")["Revenue"].sum().idxmax()
+weekdays_total = view.loc[view["Weekday"] < 5, "Revenue"].mean()
+weekend_total = view.loc[view["Weekday"] >= 5, "Revenue"].mean()
+weekend_lift = (weekend_total / weekdays_total - 1) if weekdays_total else 0
+
+with st.container(border=True):
+    st.subheader("A quick read of this selection")
+    notes = st.columns(3)
+    notes[0].write(f"**Strongest month**\n\n{MONTHS[peak - 1]} has the highest total in the selected period.")
+    notes[1].write(f"**Largest category**\n\n{top_item} contributes the most revenue in this view.")
+    lift_words = "higher" if weekend_lift >= 0 else "lower"
+    notes[2].write(f"**Weekend pattern**\n\nAverage weekend rows are {abs(weekend_lift):.0%} {lift_words} than weekday rows.")
 
 st.caption(
-    "The offer chart is just a comparison of groups. It does not prove the discount caused the extra sales. "
-    "Three crazy outlier rows were already dropped from cafe_clean.csv."
+    "Read the offer chart as a comparison, not proof that a discount caused higher sales. "
+    "Three deliberately extreme practice rows were removed from the cleaned file. "
+    "Use the chart toolbar to zoom, select points, reset, or save a PNG."
 )
 
 with st.expander("Peek at the rows"):

@@ -10,14 +10,14 @@ st.set_page_config(page_title="Café sales | 2025", page_icon="☕", layout="wid
 
 # A light, quiet palette keeps the charts and labels easy to read.
 COLORS = {
-    "Pune": "#4E8EAA",       # blue
-    "Jaipur": "#C46F91",     # pink
-    "Kochi": "#D5A62E",      # yellow
+    "Pune": "#397D9B",       # blue
+    "Jaipur": "#A84F75",     # pink
+    "Kochi": "#916B08",      # golden yellow
 }
 ITEM_COLORS = {
-    "Beverages": "#4E8EAA",
-    "Bakery": "#C46F91",
-    "Merchandise": "#D5A62E",
+    "Beverages": "#397D9B",
+    "Bakery": "#A84F75",
+    "Merchandise": "#916B08",
 }
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -27,17 +27,23 @@ ITEMS = ["Beverages", "Bakery", "Merchandise"]
 st.markdown(
     """
     <style>
-    .stApp { background: #F5F8FC; color: #243746; }
+    .stApp { background: #F6F9FC; color: #243746; }
     [data-testid="stHeader"] { background: transparent; }
-    h1, h2, h3 { color: #243746; }
-    [data-testid="stSidebar"] { background: #EAF1F8; }
+    h1, h2, h3 { color: #243746; letter-spacing: -0.02em; }
+    h1 { font-size: 2.25rem; }
+    [data-testid="stSidebar"] { background: #EDF3F9; }
+    [data-testid="stCaptionContainer"] { color: #5D7180; }
+    [data-testid="stTabs"] button { font-weight: 600; }
+    [data-testid="stTabs"] button[aria-selected="true"] {
+        color: #275F78; border-bottom-color: #397D9B;
+    }
     [data-testid="stMetric"] {
         background: #FFFFFF; border: 1px solid #DCE6EF;
-        border-radius: 10px; padding: 14px 16px;
+        border-radius: 12px; padding: 15px 17px;
     }
     [data-testid="stPlotlyChart"] {
         background: #FFFFFF; border: 1px solid #E1E9F0;
-        border-radius: 10px; padding: 6px;
+        border-radius: 12px; padding: 6px;
     }
     </style>
     """,
@@ -81,16 +87,17 @@ def money_in_millions(amount_in_thousands):
 
 sales = load_sales()
 
-st.title("Café sales, clearly explained")
-st.write(
-    "Explore sales by month, product, outlet, and offer. Use the filters on the left; "
-    "the summary and charts update to match your selection."
+st.caption("CAFÉ SALES · 2025 · PUNE · JAIPUR · KOCHI")
+st.title("A clearer view of café sales")
+st.markdown(
+    "Explore **what changed**, **which products led**, and **how outlets compare**. "
+    "Choose a tab to focus on one question; your filters carry across every view."
 )
-st.caption("Revenue in the charts is shown in Rs thousand. Headline totals are shown in Rs million.")
+st.caption("*Chart values are in Rs thousand. Headline totals are in Rs million.*")
 
 # Sidebar filters
-st.sidebar.title("Choose your view")
-st.sidebar.caption("All options start selected. Change one filter at a time to compare results.")
+st.sidebar.title("Build your view")
+st.sidebar.caption("Everything starts selected. Adjust one filter to see how the story changes.")
 
 if st.sidebar.button("Reset all filters", use_container_width=True):
     for key in ("filter_outlets", "filter_items", "filter_months", "filter_offers"):
@@ -155,11 +162,12 @@ weekend_change = (weekend_average / weekday_average - 1) if weekday_average else
 change_word = "higher" if weekend_change >= 0 else "lower"
 
 with st.container(border=True):
-    st.subheader("A quick summary")
+    st.subheader("The short version")
+    st.markdown("*These notes update with your filters.*")
     insight1, insight2, insight3 = st.columns(3)
-    insight1.markdown(f"**Strongest month**  \n{MONTHS[peak_month - 1]} has the highest total in this selection.")
-    insight2.markdown(f"**Top product category**  \n{top_item} contributes the most revenue in this selection.")
-    insight3.markdown(f"**Weekend pattern**  \nAverage weekend records are {abs(weekend_change):.0%} {change_word} than weekday records.")
+    insight1.markdown(f"**Strongest month**  \n{MONTHS[peak_month - 1]} had the highest total revenue.")
+    insight2.markdown(f"**Leading category**  \n{top_item} contributed the most revenue.")
+    insight3.markdown(f"**Weekend pattern**  \nWeekend records averaged {abs(weekend_change):.0%} {change_word} revenue than weekday records.")
 
 # One tab per question keeps the page calm while making every analysis easy to find.
 overview_tab, product_tab, outlet_tab, offer_tab, data_tab = st.tabs(
@@ -169,6 +177,7 @@ chart_config = {"displaylogo": False, "displayModeBar": "hover"}
 
 with overview_tab:
     st.subheader("How did sales change through the year?")
+    st.markdown("**Choose a measure.** Total revenue shows the whole month’s sales; average sale compares a typical record.")
     trend_measure = st.radio(
         "Show", ["Total revenue", "Average sale"], horizontal=True,
         help="Total revenue adds records together. Average sale compares the typical record value.",
@@ -191,14 +200,14 @@ with overview_tab:
     )
     line.update_traces(line=dict(width=3), marker=dict(size=8))
     st.plotly_chart(style_chart(line), use_container_width=True, config=chart_config)
-    st.caption("Hover for the exact value. Click an outlet in the legend to hide or show its line.")
+    st.caption("*Reading the chart:* hover for an exact value. Click an outlet name in the legend to show or hide its line.")
 
     weekday = view.groupby("Weekday", as_index=False)["Revenue"].mean()
     weekday["Day"] = weekday["Weekday"].map(lambda day: WEEKDAYS[int(day)])
     weekday["Day type"] = weekday["Day"].map(lambda day: "Weekend" if day in ["Sat", "Sun"] else "Weekday")
     day_chart = px.bar(
         weekday, x="Day", y="Revenue", color="Day type",
-        color_discrete_map={"Weekday": "#4E8EAA", "Weekend": "#D5A62E"},
+        color_discrete_map={"Weekday": "#397D9B", "Weekend": "#916B08"},
         category_orders={"Day": WEEKDAYS},
         labels={"Day": "Day of week", "Revenue": "Average revenue (Rs thousand)"},
         title="Which days tend to be busier?",
@@ -208,6 +217,7 @@ with overview_tab:
 
 with product_tab:
     st.subheader("Which categories contribute most?")
+    st.markdown("**Use total revenue** to compare contribution, or **average record** to compare typical sales size.")
     product_measure = st.radio(
         "Compare categories by", ["Total revenue", "Average record"], horizontal=True,
         key="product_measure",
@@ -225,7 +235,7 @@ with product_tab:
     )
     product_chart.update_traces(textposition="outside", cliponaxis=False, showlegend=False)
     st.plotly_chart(style_chart(product_chart), use_container_width=True, config=chart_config)
-    st.caption("Bar-end percentages show each category's share of the values plotted above.")
+    st.caption("*The percentage at each bar end is the category’s share of the values shown.*")
 
     st.subheader("How do categories compare across outlets?")
     item_grid = view.pivot_table(index="Outlet", columns="Item", values="Revenue", aggfunc="mean")
@@ -233,15 +243,16 @@ with product_tab:
     item_grid = item_grid.reindex(columns=[item for item in ITEMS if item in selected_items])
     heatmap = px.imshow(
         item_grid, text_auto=".0f", aspect="auto",
-        color_continuous_scale=["#F7FAFD", "#BBD8E8", "#4E8EAA"],
+        color_continuous_scale=["#F7FAFD", "#BBD8E8", "#397D9B"],
         labels={"x": "Category", "y": "Outlet", "color": "Rs thousand"},
         title="Average record revenue by outlet and category",
     )
     st.plotly_chart(style_chart(heatmap, height=340), use_container_width=True, config=chart_config)
-    st.caption("Each cell is an average. A darker cell represents a higher average record value.")
+    st.caption("*Each cell is an average. Darker blue means a higher average record value.*")
 
 with outlet_tab:
     st.subheader("Compare outlet performance")
+    st.markdown("**Total revenue** reflects outlet size; **average record** compares the typical sale value.")
     outlet_measure = st.radio(
         "Rank outlets by", ["Total revenue", "Average record"], horizontal=True,
         key="outlet_measure",
@@ -265,7 +276,7 @@ with outlet_tab:
     outlet_item = outlet_item.reindex(columns=[outlet for outlet in OUTLETS if outlet in selected_outlets])
     outlet_heatmap = px.imshow(
         outlet_item, text_auto=".0f", aspect="auto",
-        color_continuous_scale=["#FFF8FB", "#E8C4D2", "#C46F91"],
+        color_continuous_scale=["#FFF8FB", "#E8C4D2", "#A84F75"],
         labels={"x": "Outlet", "y": "Category", "color": "Rs thousand"},
         title="Average record by category and outlet",
     )
@@ -273,6 +284,7 @@ with outlet_tab:
 
 with offer_tab:
     st.subheader("What do sales look like at different offer levels?")
+    st.markdown("Choose one product category to make the comparison easier to interpret.")
     offer_item = st.selectbox(
         "Product category", ["All selected categories"] + [item for item in ITEMS if item in selected_items],
         key="offer_item",
@@ -287,10 +299,11 @@ with offer_tab:
     )
     offer_chart.update_xaxes(dtick=5)
     st.plotly_chart(style_chart(offer_chart, height=400), use_container_width=True, config=chart_config)
-    st.info("This is a comparison between groups. It does not prove that changing the offer caused revenue to change.")
+    st.info("**A useful caution:** this compares groups in the practice data. It does not prove that an offer caused revenue to change.")
 
 with data_tab:
     st.subheader("Inspect and download the selected records")
+    st.markdown("Use the distribution to spot the shape of the data, then download the filtered rows if you want to explore them yourself.")
     distribution = px.histogram(
         view, x="Revenue", color="Item", color_discrete_map=ITEM_COLORS,
         marginal="box", nbins=35, barmode="overlay", opacity=0.72,

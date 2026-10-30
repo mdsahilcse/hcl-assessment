@@ -1,6 +1,6 @@
 # HCL Python Assessment
 
-A café sales explorer with a light blue, pink, and yellow palette. Charts are separated into tabs so you can focus on one question at a time: overall trends, products, outlets, offers, or the underlying data. The filters update the full view, and comparison controls switch between totals and averages. The app includes short plain-language explanations, a revenue distribution view, a reset button, and CSV download.
+An executive-style café sales dashboard for 2025, with a friendly blue, pink, and gold palette. Five headline metrics summarize the selected view, and the main charts sit side by side for a quick read. Tabs keep deeper product, outlet, offer, and data analysis easy to reach. The page includes an original inline café illustration, a highest-month marker, readable value labels, detailed hover notes, filters, and CSV download.
 
 ## Run locally
 

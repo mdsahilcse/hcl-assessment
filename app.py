@@ -45,6 +45,15 @@ st.markdown(
         background: #FFFFFF; border: 1px solid #E1E9F0;
         border-radius: 12px; padding: 6px;
     }
+    .hero-card {
+        background: linear-gradient(110deg, #FFFFFF 0%, #F3F8FC 62%, #FFF7FA 100%);
+        border: 1px solid #DCE6EF; border-radius: 16px;
+        padding: 22px 26px; margin: 4px 0 18px 0;
+    }
+    .hero-kicker { color: #397D9B; font-size: .76rem; font-weight: 700;
+        letter-spacing: .12em; text-transform: uppercase; }
+    .hero-copy { color: #526777; font-size: 1rem; line-height: 1.55; }
+    .hero-card h1 { margin: 5px 0 8px 0; font-size: 2.15rem; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -87,13 +96,31 @@ def money_in_millions(amount_in_thousands):
 
 sales = load_sales()
 
-st.caption("CAFÉ SALES · 2025 · PUNE · JAIPUR · KOCHI")
-st.title("A clearer view of café sales")
-st.markdown(
-    "Explore **what changed**, **which products led**, and **how outlets compare**. "
-    "Choose a tab to focus on one question; your filters carry across every view."
-)
-st.caption("*Chart values are in Rs thousand. Headline totals are in Rs million.*")
+heading, illustration = st.columns([5, 1])
+with heading:
+    st.caption("CAFÉ SALES · 2025 · PUNE · JAIPUR · KOCHI")
+    st.title("Café sales & performance")
+    st.markdown(
+        "A quick look at **what changed**, **which products led**, and **how the outlets compare**. "
+        "Your filters update every number and chart."
+    )
+    st.caption("*Charts use Rs thousand; headline totals use Rs million.*")
+with illustration:
+    st.markdown(
+        """
+        <div style="display:flex;justify-content:center;align-items:center;height:135px;">
+          <svg role="img" aria-label="Coffee cup and rising sales line" width="128" height="112" viewBox="0 0 128 112" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="65" cy="55" r="48" fill="#EAF3F9"/>
+            <path d="M35 43h53v31a17 17 0 0 1-17 17H52a17 17 0 0 1-17-17V43Z" fill="#fff" stroke="#397D9B" stroke-width="3"/>
+            <path d="M88 51h8a12 12 0 0 1 0 24h-8" fill="none" stroke="#397D9B" stroke-width="3"/>
+            <path d="M47 35c-6-7 4-9 0-16m17 16c-6-7 4-9 0-16m17 16c-6-7 4-9 0-16" fill="none" stroke="#A84F75" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="m40 81 15-10 13 4 21-19" fill="none" stroke="#916B08" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="89" cy="56" r="3.5" fill="#916B08"/>
+          </svg>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # Sidebar filters
 st.sidebar.title("Build your view")
@@ -138,14 +165,18 @@ if view.empty:
     st.info("No records match these filters. Widen a range or add an outlet/category.")
     st.stop()
 
-# Summary numbers
+# Five headline numbers answer the basic questions before readers open a chart.
 outlet_totals = view.groupby("Outlet")["Revenue"].sum()
 top_outlet = outlet_totals.idxmax()
-k1, k2, k3, k4 = st.columns(4)
-k1.metric("Total revenue", money_in_millions(view["Revenue"].sum()))
-k2.metric("Average record", f"₹{view['Revenue'].mean():,.0f} thousand", help="One record is one item at one outlet on one date.")
-k3.metric("Records shown", f"{len(view):,}")
-k4.metric("Leading outlet", top_outlet)
+item_totals = view.groupby("Item")["Revenue"].sum()
+top_item = item_totals.idxmax()
+row_share = len(view) / len(sales)
+metrics = st.columns(5)
+metrics[0].metric("Total revenue", f"₹{view['Revenue'].sum() / 1000:,.1f}M", help="Sum of revenue in the current filters.")
+metrics[1].metric("Average per record", f"₹{view['Revenue'].mean():,.0f}k", help="One record is one item at one outlet on one date.")
+metrics[2].metric("Records shown", f"{len(view):,}", delta=f"{row_share:.0%} of all records", delta_color="off")
+metrics[3].metric("Leading outlet", top_outlet, delta=f"₹{outlet_totals[top_outlet] / 1000:,.1f}M revenue", delta_color="off")
+metrics[4].metric("Top product line", top_item, delta=f"₹{item_totals[top_item] / 1000:,.1f}M revenue", delta_color="off")
 
 st.caption(
     f"Current view: {MONTHS[first_month - 1]}–{MONTHS[last_month - 1]}, "
@@ -155,7 +186,6 @@ st.caption(
 
 # Plain-language observations based on the active filters
 peak_month = int(view.groupby("Month")["Revenue"].sum().idxmax())
-top_item = view.groupby("Item")["Revenue"].sum().idxmax()
 weekday_average = view.loc[view["Weekday"] < 5, "Revenue"].mean()
 weekend_average = view.loc[view["Weekday"] >= 5, "Revenue"].mean()
 weekend_change = (weekend_average / weekday_average - 1) if weekday_average else 0
@@ -198,13 +228,37 @@ with overview_tab:
         labels={"Month name": "Month", "Revenue": y_label},
         title="One point per month for each outlet",
     )
-    line.update_traces(line=dict(width=3), marker=dict(size=8))
-    st.plotly_chart(style_chart(line), use_container_width=True, config=chart_config)
-    st.caption("*Reading the chart:* hover for an exact value. Click an outlet name in the legend to show or hide its line.")
+    line.update_traces(
+        line=dict(width=3), marker=dict(size=8),
+        hovertemplate="<b>%{fullData.name}</b><br>%{x}<br>Revenue: ₹%{y:,.1f} thousand<extra></extra>",
+    )
+    peak_point = trend.loc[trend["Revenue"].idxmax()]
+    line.add_scatter(
+        x=[peak_point["Month name"]], y=[peak_point["Revenue"]],
+        mode="markers+text", text=["Peak"], textposition="top center",
+        marker=dict(size=15, color="#E2B541", symbol="star", line=dict(color="white", width=2)),
+        name="Highest month", hovertemplate="Highest monthly value<extra></extra>",
+        showlegend=False,
+    )
+    category_totals = view.groupby("Item", as_index=False)["Revenue"].sum().sort_values("Revenue")
+    category_chart = px.bar(
+        category_totals, x="Revenue", y="Item", orientation="h", color="Item",
+        color_discrete_map=ITEM_COLORS, text=category_totals["Revenue"].map(lambda value: f"₹{value / 1000:.1f}M"),
+        labels={"Revenue": "Revenue (Rs thousand)", "Item": "Product category"},
+        title="Total revenue by product category",
+    )
+    category_chart.update_traces(textposition="outside", cliponaxis=False, showlegend=False)
+    chart_left, chart_right = st.columns(2, gap="medium")
+    chart_left.plotly_chart(style_chart(line), use_container_width=True, config=chart_config)
+    chart_left.caption("*One point per month.* Hover for a value or click an outlet in the legend to focus the chart.")
+    chart_right.plotly_chart(style_chart(category_chart), use_container_width=True, config=chart_config)
+    chart_right.caption("Labels show each category’s total for the selected period.")
 
+    st.subheader("Which days are busiest?")
     weekday = view.groupby("Weekday", as_index=False)["Revenue"].mean()
     weekday["Day"] = weekday["Weekday"].map(lambda day: WEEKDAYS[int(day)])
     weekday["Day type"] = weekday["Day"].map(lambda day: "Weekend" if day in ["Sat", "Sun"] else "Weekday")
+    weekday["Records"] = view.groupby("Weekday")["Revenue"].size().values
     day_chart = px.bar(
         weekday, x="Day", y="Revenue", color="Day type",
         color_discrete_map={"Weekday": "#397D9B", "Weekend": "#916B08"},
@@ -212,8 +266,14 @@ with overview_tab:
         labels={"Day": "Day of week", "Revenue": "Average revenue (Rs thousand)"},
         title="Which days tend to be busier?",
     )
-    st.plotly_chart(style_chart(day_chart, height=330), use_container_width=True, config=chart_config)
-    st.caption("Bars show the average revenue for one record on each day of the week.")
+    day_chart.update_traces(
+        text=weekday["Revenue"].map(lambda value: f"₹{value:,.0f}k"),
+        textposition="outside",
+        customdata=weekday[["Records"]],
+        hovertemplate="<b>%{x}</b><br>Average: ₹%{y:,.1f} thousand<br>Records: %{customdata[0]}<extra></extra>",
+    )
+    st.plotly_chart(style_chart(day_chart, height=360), use_container_width=True, config=chart_config)
+    st.caption("Weekend bars use a gold accent. Hover for the average and number of records.")
 
 with product_tab:
     st.subheader("Which categories contribute most?")
@@ -233,7 +293,11 @@ with product_tab:
         labels={"Revenue": "Revenue (Rs thousand)", "Item": "Category"},
         title=f"{product_measure} by category",
     )
-    product_chart.update_traces(textposition="outside", cliponaxis=False, showlegend=False)
+    product_chart.update_traces(
+        text=products.apply(lambda row: f"₹{row['Revenue']:,.0f}k  ·  {row['Share']:.0%}", axis=1),
+        textposition="outside", cliponaxis=False, showlegend=False,
+        hovertemplate="<b>%{y}</b><br>Revenue: ₹%{x:,.1f} thousand<extra></extra>",
+    )
     st.plotly_chart(style_chart(product_chart), use_container_width=True, config=chart_config)
     st.caption("*The percentage at each bar end is the category’s share of the values shown.*")
 
@@ -290,12 +354,19 @@ with offer_tab:
         key="offer_item",
     )
     offer_view = view if offer_item == "All selected categories" else view[view["Item"] == offer_item]
-    offer_summary = offer_view.groupby(["Offer", "Item"], as_index=False)["Revenue"].mean()
+    offer_summary = offer_view.groupby(["Offer", "Item"], as_index=False).agg(
+        Revenue=("Revenue", "mean"), Records=("Revenue", "size")
+    )
     offer_chart = px.line(
         offer_summary, x="Offer", y="Revenue", color="Item", markers=True,
         color_discrete_map=ITEM_COLORS,
         labels={"Offer": "Offer (%)", "Revenue": "Average revenue (Rs thousand)"},
         title="Average record revenue by offer",
+        custom_data=["Records"],
+    )
+    offer_chart.update_traces(
+        line=dict(width=3), marker=dict(size=9),
+        hovertemplate="<b>%{fullData.name}</b><br>Offer: %{x}%<br>Average: ₹%{y:,.1f} thousand<br>Records: %{customdata[0]}<extra></extra>",
     )
     offer_chart.update_xaxes(dtick=5)
     st.plotly_chart(style_chart(offer_chart, height=400), use_container_width=True, config=chart_config)

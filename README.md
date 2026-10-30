@@ -1,6 +1,8 @@
 # HCL Python Assessment
 
-Interactive café sales exploration and dashboard built with pandas, Plotly, and Streamlit.
+An approachable café sales dashboard and learning notebook, built with pandas, Plotly, and Streamlit.
+
+The app groups charts into clear tabs, explains what each chart shows, updates every view from simple sidebar filters, and lets you download the filtered rows.
 
 ## Run locally
 

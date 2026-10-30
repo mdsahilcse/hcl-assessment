@@ -1,6 +1,8 @@
 # HCL Python Assessment
 
-An executive-style café sales dashboard for 2025, with a friendly blue, pink, and gold palette. Five headline metrics summarize the selected view, and the main charts sit side by side for a quick read. Tabs keep deeper product, outlet, offer, and data analysis easy to reach. The page includes an original inline café illustration, a highest-month marker, readable value labels, detailed hover notes, filters, and CSV download.
+An executive-style café sales dashboard for 2025, with a friendly blue, pink, and gold palette and a small gallery of credited café reference photos. Five headline metrics summarize the selected view, and the main charts sit side by side for a quick read. Tabs keep deeper product, outlet, offer, and data analysis easy to reach. The page includes a café interior header photo, a small coffee-and-pastry gallery, a highest-month marker, readable value labels, detailed hover notes, filters, and CSV download.
+
+See `IMAGE_CREDITS.md` for the photo sources. The photos provide atmosphere and product context; they are not part of the synthetic sales data.
 
 ## Run locally
 

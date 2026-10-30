@@ -45,6 +45,7 @@ st.markdown(
         background: #FFFFFF; border: 1px solid #E1E9F0;
         border-radius: 12px; padding: 6px;
     }
+    [data-testid="stImage"] img { border-radius: 12px; }
     .hero-card {
         background: linear-gradient(110deg, #FFFFFF 0%, #F3F8FC 62%, #FFF7FA 100%);
         border: 1px solid #DCE6EF; border-radius: 16px;
@@ -96,7 +97,7 @@ def money_in_millions(amount_in_thousands):
 
 sales = load_sales()
 
-heading, illustration = st.columns([5, 1])
+heading, hero_image = st.columns([3.7, 2], gap="large")
 with heading:
     st.caption("CAFÉ SALES · 2025 · PUNE · JAIPUR · KOCHI")
     st.title("Café sales & performance")
@@ -105,22 +106,12 @@ with heading:
         "Your filters update every number and chart."
     )
     st.caption("*Charts use Rs thousand; headline totals use Rs million.*")
-with illustration:
-    st.markdown(
-        """
-        <div style="display:flex;justify-content:center;align-items:center;height:135px;">
-          <svg role="img" aria-label="Coffee cup and rising sales line" width="128" height="112" viewBox="0 0 128 112" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="65" cy="55" r="48" fill="#EAF3F9"/>
-            <path d="M35 43h53v31a17 17 0 0 1-17 17H52a17 17 0 0 1-17-17V43Z" fill="#fff" stroke="#397D9B" stroke-width="3"/>
-            <path d="M88 51h8a12 12 0 0 1 0 24h-8" fill="none" stroke="#397D9B" stroke-width="3"/>
-            <path d="M47 35c-6-7 4-9 0-16m17 16c-6-7 4-9 0-16m17 16c-6-7 4-9 0-16" fill="none" stroke="#A84F75" stroke-width="2.5" stroke-linecap="round"/>
-            <path d="m40 81 15-10 13 4 21-19" fill="none" stroke="#916B08" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="89" cy="56" r="3.5" fill="#916B08"/>
-          </svg>
-        </div>
-        """,
-        unsafe_allow_html=True,
+with hero_image:
+    st.image(
+        Path(__file__).parent / "assets" / "cafe_interior.jpg",
+        use_container_width=True,
     )
+    st.caption("A café setting · photo by [Micheile Henderson](https://unsplash.com/@micheile)")
 
 # Sidebar filters
 st.sidebar.title("Build your view")
@@ -313,6 +304,22 @@ with product_tab:
     )
     st.plotly_chart(style_chart(heatmap, height=340), use_container_width=True, config=chart_config)
     st.caption("*Each cell is an average. Darker blue means a higher average record value.*")
+
+    st.subheader("A few familiar café details")
+    photo_drink, photo_beans = st.columns(2, gap="large")
+    with photo_drink:
+        st.image(
+            Path(__file__).parent / "assets" / "coffee_and_pastry.jpg",
+            use_container_width=True,
+        )
+        st.caption("Coffee and pastry · photo by [Esra Afşar](https://unsplash.com/@esraafsar)")
+    with photo_beans:
+        st.image(
+            Path(__file__).parent / "assets" / "coffee_beans.jpg",
+            use_container_width=True,
+        )
+        st.caption("Roasted coffee beans · photo by [Tatiana Fernández R](https://unsplash.com/@tatianafernandez)")
+    st.caption("*These are reference photos for context; they are not images of the practice dataset's actual products or outlets.*")
 
 with outlet_tab:
     st.subheader("Compare outlet performance")

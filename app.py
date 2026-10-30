@@ -135,11 +135,10 @@ start_offer, end_offer = st.sidebar.slider(
     step=5,
     help="Keep rows whose offer is inside this range.",
 )
-trend_detail = st.sidebar.radio(
-    "Trend detail",
-    options=["Month", "Week", "Day"],
-    horizontal=True,
-    help="Choose how much detail to show in the sales trend.",
+trend_measure = st.sidebar.radio(
+    "Monthly chart shows",
+    options=["Total revenue", "Average sale"],
+    help="Choose total sales or the average value of one record in each month.",
 )
 offer_item = st.sidebar.selectbox(
     "Compare offers for",
@@ -182,37 +181,32 @@ st.caption(
 )
 
 # --- charts ---
-# Group dates at the level chosen in the sidebar. Month labels stay readable;
-# weeks and days retain real dates so Plotly can format and zoom the axis.
-if trend_detail == "Month":
-    trend = view.groupby(["Month", "Outlet"], as_index=False)["Revenue"].sum()
-    trend["Period"] = trend["Month"].map(lambda month: MONTHS[month - 1])
-    period_order = {"Period": MONTHS}
-    trend_title = "Revenue by month"
-elif trend_detail == "Week":
-    trend = view.assign(Period=view["Date"].dt.to_period("W").dt.start_time)
-    trend = trend.groupby(["Period", "Outlet"], as_index=False)["Revenue"].sum()
-    period_order = {}
-    trend_title = "Revenue by week"
+# Keep one point per month and outlet so each line stays easy to follow.
+monthly_groups = view.groupby(["Month", "Outlet"])["Revenue"]
+if trend_measure == "Total revenue":
+    trend = monthly_groups.sum().rename("Revenue").reset_index()
+    trend_title = "Monthly revenue by outlet"
+    y_axis_label = "Revenue (Rs thousand)"
 else:
-    trend = view.groupby(["Date", "Outlet"], as_index=False)["Revenue"].sum()
-    trend = trend.rename(columns={"Date": "Period"})
-    period_order = {}
-    trend_title = "Revenue by day"
+    trend = monthly_groups.mean().rename("Revenue").reset_index()
+    trend_title = "Average monthly sale by outlet"
+    y_axis_label = "Average revenue per record (Rs thousand)"
 
+trend["Period"] = trend["Month"].map(lambda month: MONTHS[month - 1])
 fig_month = px.line(
-    trend.sort_values("Period"),
+    trend,
     x="Period",
     y="Revenue",
     color="Outlet",
-    markers=trend_detail == "Month",
+    markers=True,
     color_discrete_map=OUTLET_COLORS,
-    category_orders={"Outlet": OUTLET_ORDER, **period_order},
+    category_orders={"Outlet": OUTLET_ORDER, "Period": MONTHS},
     title=trend_title,
-    labels={"Period": "", "Revenue": "Revenue (Rs thousand)"},
+    labels={"Period": "Month", "Revenue": y_axis_label},
 )
-fig_month.update_traces(line=dict(width=2.5), marker=dict(size=7))
+fig_month.update_traces(line=dict(width=3), marker=dict(size=8))
 polish(fig_month, legend_title="Outlet")
+fig_month.update_xaxes(showgrid=False, tickangle=0)
 
 by_item = (
     view.groupby("Item", as_index=False)["Revenue"]
@@ -291,17 +285,12 @@ fig_day = px.bar(
 fig_day.update_traces(showlegend=False)
 polish(fig_day)
 
-# Keep the compact Plotly toolbar available for zoom, reset, and image download.
-chart_cfg = {
-    "displaylogo": False,
-    "displayModeBar": "hover",
-    "modeBarButtonsToAdd": ["select2d", "lasso2d"],
-    "toImageButtonOptions": {"format": "png", "filename": "cafe_sales_chart", "scale": 2},
-}
+# Hover labels and legend clicks stay active without a crowded toolbar.
+chart_cfg = {"displaylogo": False, "displayModeBar": False}
 
 left, right = st.columns((1.35, 1), gap="medium")
 left.plotly_chart(fig_month, use_container_width=True, config=chart_cfg)
-left.caption("Follow the lines across months, weeks, or days. Hover for exact values; use the toolbar to zoom or save an image.")
+left.caption("There is one point per month. Hover for exact values, or click an outlet in the legend to hide or show its line.")
 right.plotly_chart(fig_item, use_container_width=True, config=chart_cfg)
 right.caption("The percentage at the end of each bar is that category's share of the selected revenue.")
 
@@ -331,7 +320,7 @@ with st.container(border=True):
 st.caption(
     "Read the offer chart as a comparison, not proof that a discount caused higher sales. "
     "Three deliberately extreme practice rows were removed from the cleaned file. "
-    "Use the chart toolbar to zoom, select points, reset, or save a PNG."
+    "Hover over charts for exact values. Click a legend label to focus on selected outlets."
 )
 
 with st.expander("Peek at the rows"):

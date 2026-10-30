@@ -1,6 +1,6 @@
 # HCL Python Assessment
 
-A café sales explorer designed for both quick reading and hands-on investigation. The Streamlit app includes friendly filters, live summary numbers, month/week/day trends, outlet and product comparisons, offer analysis, weekday patterns, chart zoom and image export, and filtered CSV downloads. A short explanation beside each chart helps readers understand what they are seeing.
+A café sales explorer with a light blue, pink, and yellow palette. Charts are separated into tabs so you can focus on one question at a time: overall trends, products, outlets, offers, or the underlying data. The filters update the full view, and comparison controls switch between totals and averages. The app includes short plain-language explanations, a revenue distribution view, a reset button, and CSV download.
 
 ## Run locally
 
